@@ -1,0 +1,315 @@
+---
+title: "Chapter 4: Balance and Sequentiality in Bayesian Analyses"
+subtitle: "DS 400: Bayesian Statistics"
+author: "Your Name"
+date: today
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    code-tools: true
+    df-print: paged
+    fig-width: 8
+    fig-height: 6
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+  cache: true
+---
+
+```{r}
+
+# Load required packages
+library(bayesrules)
+library(tidyverse)
+library(janitor)
+```
+
+## 🎬 The Bechdel Test: A Bayesian Story
+
+::: callout-note
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+-   Explore the balanced influence of the prior and data on the posterior
+-   Understand how different priors lead to different posteriors
+-   Perform sequential Bayesian analysis
+-   Analyze how posterior models evolve with new data
+:::
+
+In Alison Bechdel's 1985 comic strip *The Rule*, a character states that they only see a movie if it satisfies three criteria:
+
+1.  The movie has to have at least two women in it
+2.  These two women talk to each other
+3.  They talk about something besides a man
+
+These criteria constitute the **Bechdel test** for the representation of women in film.
+
+::: callout-tip
+## Think About It 🤔
+
+Before we dive into the analysis, what percentage of recent movies do you think pass the Bechdel test? Is it closer to 10%, 50%, 80%, or 100%?
+:::
+
+## 👥 Meet Our Three Analysts
+
+Let π (a random value between 0 and 1) denote the unknown proportion of recent movies that pass the Bechdel test. Three friends have different prior beliefs about π:
+
+-   **The Feminist** 🎭: Believes most movies lack strong women characters
+    -   Beta(5, 11)
+    
+-   **The Clueless** 🤷: Unsure whether passing the test is common or uncommon
+    -   Beta(1,1)\
+
+    
+-   **The Optimist** 😊: Thinks the Bechdel test is a low bar and most movies pass
+    -   Beta(14, 1)
+
+### 📊 Matching Priors to Beliefs
+
+The Feminist: Use `plot_beta()` to visualize the prior
+
+```{r}
+# Higher beta than alpha -> belief π < 0.5
+bayesrules::plot_beta(alpha = 5, beta = 11)
+```
+
+The Clueless: Use `plot_beta()` to visualize the prior
+
+```{r}
+# Uniform prior -> no preference; data will dominate quickly.
+bayesrules::plot_beta(alpha = 1, beta = 1)
+```
+
+The Optimist: Use `plot_beta()` to visualize the prior
+
+```{r}
+# aplha -> beta π close to 1 (most movies pass)
+bayesrules::plot_beta(alpha = 14, beta = 1)
+```
+
+::: callout-important
+## Key Concepts
+
+**Informative Prior**: Reflects specific information with high certainty (low variability) - Example: The optimist's Beta(14,1) prior
+
+**Vague Prior**: Reflects little specific information about the unknown variable - Example: The clueless's Beta(1,1) flat prior
+:::
+
+## 🎬 The Data: Testing Our Beliefs
+
+Let's examine a sample of movies from the FiveThirtyEight Bechdel test dataset:
+
+```{r}
+
+# Load the data
+data(bechdel, package = "bayesrules")
+
+# Take a sample of 20 movies
+set.seed(84735)
+bechdel_20 <- bechdel %>% 
+  sample_n(20)
+
+# Display first few movies
+bechdel_20 
+```
+
+Calculate the pass rate
+
+```{r}
+# y = number of passes (binary==1), n sample size, p_hat = sample pass rate
+y <- sum(bechdel_20$binary == 1, na.rm = TRUE)
+n <- nrow(bechdel_20)
+p_hat <- y /n
+tibble(n,y, pass_rate = p_hat)
+
+```
+
+## 🔄 From Prior to Posterior
+
+Now let's see how each analyst updates their beliefs with this data using the Beta-Binomial model:
+
+The Feminist: Use `plot_beta_binomial()` to visualize the posterior
+
+```{r}
+bayesrules::plot_beta_binomial(alpha = 5, beta = 11, y = y, n = n)
+```
+
+The Clueless: Use `plot_beta_binomial()` to visualize the posterior
+
+```{r}
+bayesrules::plot_beta_binomial(alpha = 1, beta = 1, y = y, n = n)
+```
+
+The Optimist: Use `plot_beta_binomial()` to visualize the posterior
+
+```{r}
+bayesrules::plot_beta_binomial(alpha = 14, beta = 1, y = y, n = n)
+```
+
+### 
+
+::: callout-note
+## Key Observation
+
+Notice how the **clueless** analyst's posterior looks identical to the likelihood! This happens when we use a flat, uninformative prior - the data completely dominates the posterior.
+:::
+
+## 📈 The Impact of Sample Size
+
+If you’re concerned by the fact that our three analysts have differing posterior understandings of π, the proportion of recent movies that pass the Bechdel, don’t despair yet. Don’t forget the role that *data* plays in a Bayesian analysis. To examine these dynamics, consider three new analysts – Morteza, Nadide, and Ursula – who all share the optimistic Beta(14,1) prior for π *but* each have access to different data.
+
+Morteza reviews n=13 movies from the year 1991, among which Y=6 (about 46%) pass the Bechdel:
+
+```{r}
+bechdel %>% 
+  filter(year == 1991) %>% 
+  tabyl(binary) %>% 
+  adorn_totals("row")
+```
+
+Nadide reviews n=63 movies from 2000, among which Y=29 (about 46%) pass the Bechdel:
+
+```{r}
+bechdel %>% 
+  filter(year == 2000) %>% 
+  tabyl(binary) %>% 
+  adorn_totals("row")
+```
+
+Finally, Ursula reviews n=99 movies from 2013, among which Y=46 (about 46%) pass the Bechdel:
+
+```{r}
+bechdel %>% 
+  filter(year == 2013) %>% 
+  tabyl(binary) %>% 
+  adorn_totals("row")
+```
+```{r}
+counts_by_year <- function(yr) {
+  tmp <- bechdel %>% filter(year == yr)
+  tibble(
+    year = yr,
+    n = nrow(tmp),
+    y = sum(tmp$ninary == 1, na.rm = TRUE)
+  )
+}
+
+c_1991 <- counts_by_year(1991) # expect ~ n=13, y=6
+c_2000 <- counts_by_year(2000) # expect ~ n=63 y=29
+c_2013 <- counts_by_year(2013) # expect ~ n=99, y=46
+
+bind_rows(c_1991, c_2000, c_2013)
+```
+
+For Morteza: Use `plot_beta_binomial()` to visualize the posterior
+
+```{r}
+bayesrules::plot_beta_binomial(alpha = 14, beta = 1, y = c_1991$y, n = c_1991$n)
+```
+
+For Nadide: Use `plot_beta_binomial()` to visualize the posterior
+
+```{r}
+bayesrules::plot_beta_binomial(alpha = 14, beta = 1, y = c_2000$y, n = c_2000$n)
+```
+
+For Ursula: Use `plot_beta_binomial()` to visualize the posterior
+
+```{r}
+bayesrules::plot_beta_binomial(alpha = 14, beta = 1, y = c_2013$y, n = c_2013$n)
+```
+
+### 
+
+## True & False
+
+For each statement below, indicate whether the statement is true or false. Provide your reasoning.
+
+1.  All prior choices are informative.
+
+    1.  Are false, some priors are basically neutral for example Beta(1,1) says, I don't know anything form 0 to 1 is equally likely." That's not adding much information.
+
+2.  There may be good reasons for having an informative prior.
+
+    1.  True, if we already have solid evidence(past studies, expert knowledge) or very little new data, it's smart to use a prior that reflects what we already know.
+
+3.  Any prior choice can be overcome by enough data.
+
+    1.  True, as you collect more data, the data"s voice gets louder and the prior matters less. The only exception: a prior that literally rules out the truth (e.g., puts zero probability on it) can't be fixed by data.
+
+4.  The frequentist paradigm is totally objective.
+
+    1.  False, Even in frequentist methods, human make choices (which model, which variables, how to clean data, when to stop collecting). Those choices add subjectivity.
+
+**Exercise 4.1 (Match the prior to the description)** Five different prior models for π are listed below. Label each with one of these descriptors:
+
+-   somewhat favoring π<0.5 Beta(1, 3)
+
+-   strongly favoring π<0.5 Beta(1, 10)
+
+-   centering π on 0.5 Beta(1.8, 1.8)
+
+-   somewhat favoring π>0.5 Beta(3, 2)
+
+-   strongly favoring π>0.5 Beta(17, 2)
+
+1.  Beta(1.8,1.8)
+
+2.  Beta(3,2)
+
+3.  Beta(1,10)
+
+4.  Beta(1,3)
+
+5.  Beta(17,2)
+
+**Exercise 4.2 (Match the plot to the code)** Which arguments to the `plot_beta_binomial()` function generated the plot below?
+
+1.  `alpha = 2, beta = 2, y = 8, n = 11`
+
+2.  `alpha = 2, beta = 2, y = 3, n = 11`
+
+3.  `alpha = 3, beta = 8, y = 2, n = 6`
+
+4.  `alpha = 3, beta = 8, y = 4, n = 6`
+
+5.  `alpha = 3, beta = 8, y = 2, n = 4`
+
+6.  `alpha = 8, beta = 3, y = 2, n = 4`
+
+![](images/clipboard-2366982972.png)
+```{r}
+
+opts <- tribble(
+  ~label, ~alpha, ~beta, ~y, ~n,
+  "1) a=2,b=2,y=8,n=11", 2, 2, 8, 11,
+  "2) a=2, b=2, y=3, n=11", 2, 2, 3, 11,
+  "3) a=3, b=8, y=2, n=6", 3, 8, 2, 6,
+  "4) a=3, b=8, y=4, n=6", 3, 8, 4, 6,
+  "5) a=3, b=8, y=2, n=4", 3, 8, 2, 4,
+  "6) a=8, b=3, y=2, n=4", 8, 3, 2, 4
+)
+
+#Plot each
+purrr::pwalk(opts, ~{
+  bayesrules::plot_beta_binomial(alpha = ..2, beta = ..3, y = ..4, n = ..5) +
+    ggplot2::ggtitle(..1) %>% print()
+})
+```
+
+**Exercise 4.7 (What dominates the posterior?)** In each situation below you will be given a Beta prior for π and some Binomial trial data. For each scenario, identify which of the following is true: the prior has more influence on the posterior, the data has more influence on the posterior, or the posterior is an equal compromise between the data and the prior.
+
+1.  Prior: π∼Beta(1,4), data: Y=8 successes in n=10 trials -> data dominates
+
+2.  Prior: π∼Beta(20,3), data: Y=0 successes in n=1 trial -> prior dominates
+
+3.  Prior: π∼Beta(4,2), data: Y=1 success in n=3 trials -> data dominates
+
+4.  Prior: π∼Beta(3,10), data: Y=10 successes in n=13 trials -> data dominates
+
+5.  Prior: π∼Beta(20,2), data: Y=10 successes in n=200 trials -> data dominates
