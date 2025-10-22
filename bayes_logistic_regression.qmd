@@ -1,0 +1,230 @@
+---
+title: "Chapter 13 Logistic Regression"
+format: html
+editor: visual
+---
+
+Consider the following data story. Suppose we again find ourselves in Australia, the city of Perth specifically. Located on the southwest coast, Perth experiences dry summers and wet winters. Our goal will be to predict whether or not it will rain tomorrow. That is, we want to model Y, a **binary categorical response variable**, converted to a 0-1 indicator for convenience
+
+Though there are various potential predictors of rain, we’ll consider just three:
+
+X1=today's humidity at 9 a.m. (percent)
+
+X2= today's humidity at 3 p.m. (percent)
+
+X3= whether or not it rained today.
+
+### Libraries
+
+```{r}
+library(bayesrules)
+library(rstanarm)
+library(bayesplot)
+library(tidyverse)
+library(tidybayes)
+library(broom.mixed)
+```
+
+```{r}
+summary(weather_perth)
+head(weather_perth)
+```
+
+```{r}
+weather <- weather_perth %>% 
+  drop_na(humidity9am, humidity3pm, raintoday, raintomorrow) %>%
+  mutate(y = as.integer(raintomorrow == "Yes"))
+```
+
+```{r}
+# Purpose: See baseline class balance and rate. Helpful context for model difficulty.
+# Function:
+# - count(): tallies Yes/No
+# - mutate(prop = ...): computes rate
+# - ggplot(..., geom_col): bar chart of counts with labels
+
+weather %>%
+  count(raintomorrow) %>%
+  mutate(prop = n / sum(n)) %>%
+  ggplot(aes(x = raintomorrow, y = n, fill = raintomorrow)) +
+  geom_col() +
+  geom_text(aes(label = scales::percent(prop, accuracy = 0.1)), 
+            vjust = -0.3) +
+  labs(title = "How often does it rain tomorrow?",
+       x = NULL, y = "Count") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+### Data
+
+```{r}
+data(weather_perth)
+weather <- weather_perth %>% 
+  select(day_of_year, raintomorrow, humidity9am, humidity3pm, raintoday)
+```
+
+### Exploratory Data Analysis
+
+Take 10 minutes to learn about the data, focusing on `raintomorrow`
+
+### Rain Model 1
+
+Priors:
+
+✅ From probability → log-odds
+
+-   our prior understanding that on an average day, there’s a roughly 20% chance of rain
+
+Use the logit (log-odds) transformation:
+
+```{r}
+qlogis(0.2)
+```
+
+qlogis(0.2) \# \[1\] -1.386294 → about -1.4 log-odds
+
+✅ From log-odds → probability
+
+Use the **inverse logit** (often called the logistic function):
+
+```{r}
+plogis(-1.4)
+```
+
+SD = 0.7
+
+```{r}
+plogis(-2.8)
+plogis(0)
+```
+
+This says: *before seeing data*, you think an average day’s rain probability is most likely around 20%, but **could reasonably be anywhere from \~6% to \~50%** (quite wide—intentionally weakly informative).
+
+Prior slope
+
+```{r}
+exp(0.07)
+```
+
+```{r}
+(1.072508 - 1) * 100
+```
+
+An odds ratio of ≈ 1.072 means that **for each +1 percentage point increase in humidity**, the **odds of rain multiply by 1.072**, i.e. they increase by about **7.2 %**.
+
+```{r}
+(exp(0.07 - 0.07) - 1) * 100
+(exp(0.07 + 0.07) - 1) * 100
+```
+
+The odds of rain might increase anywhere from 0% to 15% for every extra percentage point in humidity level:
+
+### Rain Model 2
+
+```{r}
+rain_model_2 <- stan_glm(
+  raintomorrow ~ humidity9am + humidity3pm + raintoday, 
+  data = weather, family = binomial,
+  prior_intercept = normal(-1.4, 0.7),
+  prior = normal(0, 2.5, autoscale = TRUE), 
+  chains = 4, iter = 5000*2, seed = 84735)
+
+rain_model_2
+```
+
+```{r}
+exp(posterior_interval(rain_model_2, prob = 0.80))
+```
+
+### Interpretation of Key Predictors
+
+#### **humidity9am** (per 1 percentage-point increase)
+
+-   **OR = 0.984 to 1.003** → **−1.6% to +0.25%** change in odds per point\
+-   This interval straddles **1.00**, so the posterior is **compatible with no effect** (possibly slightly negative to null).\
+-   With **humidity3pm** already in the model, early-morning humidity may add little unique signal due to **collinearity** or redundancy.
+
+#### **humidity3pm** (per 1 percentage-point increase)
+
+-   **OR = 1.071 to 1.095** → **+7.1% to +9.5%** higher odds of rain per point\
+-   This is a **clear positive effect**: later-day humidity is strongly associated with **higher odds of rain tomorrow**.
+
+#### **raintoday = Yes (vs No)**
+
+-   **OR = 2.40 to 4.20** → **+140% to +320%** higher odds if it rained today\
+-   Indicates strong **persistence**: rainy days tend to be followed by **higher odds of rain tomorrow**.
+
+```{r}
+classification_summary(model = rain_model_2, data = weather, cutoff = 0.2)
+```
+
+### Exercise 13.6 — Hotel bookings: getting started
+
+Plans change. Hotel room bookings get canceled. In the next exercises, you’ll explore whether hotel cancellations might be predicted based upon the circumstances of a reservation. Throughout, utilize **weakly informative priors** and the `hotel_bookings` data in the **bayesrules** package.
+
+Your analysis will incorporate the following variables on hotel bookings:
+
+| Variable | Notation | Meaning |
+|-------------------------|-------------------------|-----------------------|
+| **is_canceled** | ( Y ) | whether or not the booking was canceled |
+| **lead_time** | ( X_1 ) | number of days between the booking and scheduled arrival |
+| **previous_cancellations** | ( X_2 ) | number of previous times the guest has canceled a booking |
+| **is_repeated_guest** | ( X_3 ) | whether or not the booking guest is a repeat customer at the hotel |
+| **average_daily_rate** | ( X_4 ) | the average per-day cost of the hotel |
+
+# Data Hotel Bookings
+
+```{r}
+data("hotel_bookings")
+summary(hotel_bookings)
+head(hotel_bookings)
+```
+
+```{r}
+if ("previous_canellations" %in% names(hotel_bookings))
+  names(hotel_bookings)[names(hotel_bookings)=="previous_canellations"] <- "previous_cancellations"
+if (!"average_daily_rate" %in% names(hotel_bookings) && "adr" %in% names(hotel_bookings))
+  hotel_bookings$average_daily_rate <- hotel_bookings$adr
+
+hotel <- hotel_bookings |>
+  select(is_canceled, lead_time, previous_cancellations, is_repeated_guest, average_daily_rate) |>
+  drop_na() |>
+  mutate(y = as.integer(is_canceled == 1), is_repeated_guest = as.integer(is_repeated_guest))
+
+mean(hotel$y)  # proportion canceled
+
+cancel_model <- stan_glm(
+  y ~ lead_time + previous_cancellations + is_repeated_guest + average_daily_rate,
+  data = hotel, family = binomial,
+  prior_intercept = normal(-0.7, 1.5),
+  prior = normal(0, 0.5, autoscale = TRUE),
+  chains = 4, iter = 5000, seed = 84735
+)
+
+exp(posterior_interval(cancel_model, prob = 0.80))  # odds ratios (80% CI)
+classification_summary(model = cancel_model, data = hotel, cutoff = 0.5)
+
+```
+
+\
+\
+Questions:
+
+1.  What proportion of the sample bookings were canceled?
+
+2.  Exploratory Data Analysis: Construct and discuss plots of `is_canceled` vs each of the four potential predictors above
+
+3.  Utilize `stan_glm()` to create a bayesian logistic regression model with is_canceled as your target/response variable
+
+    1.  Your priors will be
+
+        1.  prior_intercept = normal(-0.7, 1.5)
+
+        2.  prior = normal(0, 0.5, autoscale = TRUE)
+
+4.  Use `exp(posterior_interval()` to interpret key predictors
+
+5.  Use `classification_summary` to interpret model accuracy
+
+    1.  Use different values for the cutoff argument and see how sensitivity and specificity change
