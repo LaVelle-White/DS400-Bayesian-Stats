@@ -1,0 +1,17 @@
+bayesrules
+dplyr
+Rcpp
+rstanarm
+bayesplot
+tidyverse
+ggplot2
+tibble
+tidyr
+readr
+purrr
+stringr
+forcats
+lubridate
+tidybayes
+broom.mixed
+ggpubr
