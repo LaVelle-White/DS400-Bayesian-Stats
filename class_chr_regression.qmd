@@ -9,17 +9,22 @@ editor: visual
 ### Libraries
 
 ```{r}
-
+library(tidyverse)
+library(janitor)
+library(rstanarm)
+library(here)
+library(readxl)
 ```
 
 ### Data
 
 ```{r}
-
+chr_data <- read_excel(here("data/2025_County_Health_Rankings_Data.xlsx"), sheet = 2, skip =1)
 ```
 
 ```{r}
-
+chr_data <- chr_data %>%
+  clean_names()
 ```
 
 #### Regression Variables of Interest
@@ -49,17 +54,25 @@ editor: visual
 Simplify dataframe to select columns of interest
 
 ```{r}
+chr_data_simplified <- chr_data %>%
+  select(state, county,
+         food_environment_index, percent_fair_or_poor_health)
+summary(chr_data_simplified)
+head(chr_data_simplified)
 
 ```
 
 ### Simple scatter plot, linear model
 
 ```{r}
-
+ggplot(chr_data_simplified, aes(x= food_environment_index, y = percent_fair_or_poor_health)) +
+  geom_point(alpha = 0.1) +
+  geom_smooth()
 ```
 
 ```{r}
-
+lm(percent_fair_or_poor_health ~ 
+     food_environment_index, chr_data_simplified)
 ```
 
 ### Priors
@@ -71,7 +84,7 @@ Empirical Background
 Several studies using BRFSS, County Health Rankings (CHR), or linked datasets find that better local food access is associated with lower rates of poor self-rated health.
 
 | Parameter | Prior (percent scale) | What it encodes | Literature tie-in |
-|------------------|------------------|------------------|------------------|
+|----|----|----|----|
 | **Intercept (β₀)** | `Normal(17, 4)` | At **average FEI**, a typical county has \~**17%** fair/poor health (95% prior ≈ **9–25%**) | BRFSS/CHR descriptive range (≈14–20% typical); compatible with Berkowitz (food insecurity ↔ higher % fair/poor) |
 | **Slope (β₁)** | `Normal(-1.3, 0.6)` *(pp per +1 FEI)* | Each **+1 FEI** is expected to **reduce** fair/poor health by **\~1.3 percentage points** on average (95% prior ≈ **−2.5 to −0.1** pp) | **Fan & Jin (2022)** report −**1.3 pp** per +1 FEI; **Liese et al. (2014)** (odds ≈1.1× worse per unit) implies ≈ **−1 to −1.6 pp** per +1 FEI near 15–20% baseline |
 | **Residual SD (σ)** | `Exponential(1/4.5)` | Mean residual scatter ≈ **4.5 percentage points** (allows substantial county heterogeneity) | County-level BRFSS/CHR models often show **4–6 pp** residual SD after single-predictor adjustment |
@@ -79,11 +92,16 @@ Several studies using BRFSS, County Health Rankings (CHR), or linked datasets fi
 ### Simulation with rstanarm
 
 ```{r}
-
+health_model <- stan_glm(percent_fair_or_poor_health ~ food_environment_index, data = chr_data_simplified,
+                       family = gaussian,
+                       prior_intercept = normal(17, 4),
+                       prior = normal(-1.3, 0.6), 
+                       prior_aux = exponential(1/4.5),
+                       chains = 4, iter = 5000*2, seed = 84735)
 ```
 
 ```{r}
-
+glimpse(chr_data_simplified)
 ```
 
 → Each **+1** in **Food Environment Index** is associated with **\~2.6 percentage-point lower** fair/poor health, on average.
@@ -93,3 +111,161 @@ Several studies using BRFSS, County Health Rankings (CHR), or linked datasets fi
 ### Challenge
 
 Make a map describing the **Food Environment Index** in the US
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(stringr)
+library(maps)
+library(viridis)
+library(usmap)
+```
+
+```{r}
+df <- chr_data_simplified   # your data (state, county, food_environment_index, percent_fair_or_poor_health)
+
+# Build the 'polyname' key maps uses: "state,county" all lowercase
+dat_fips <- df %>%
+  filter(!is.na(county)) %>%                         # drop statewide rows
+  mutate(
+    polyname = paste(str_to_lower(state), str_to_lower(county), sep = ","),
+    # normalize 'St.' to 'saint ' to match maps naming
+    polyname = str_replace(polyname, "^st\\.?\\s+", "saint ")
+  ) %>%
+  left_join(maps::county.fips, by = "polyname") %>%  # adds 'fips' (integer)
+  mutate(fips = sprintf("%05d", fips))               # zero-pad to 5 chars
+
+```
+
+```{r}
+plot_usmap(data = dat_fips, regions = "counties", values = "food_environment_index") +
+  scale_fill_viridis_c(name = "Food env.\nindex", na.value = "grey90") +
+  labs(title = "Food Environment Index by U.S. County") +
+  theme(legend.position = "right")
+
+```
+
+```{r}
+
+chr_data <- chr_data_simplified
+
+# Do we even have Alaska/Hawaii rows?
+chr_data %>% filter(state %in% c("Alaska","Hawaii")) %>% 
+  count(state, county, sort = TRUE) %>% 
+  print(n = 50)
+
+# Are the values missing for those rows?
+df %>% filter(state %in% c("Alaska","Hawaii")) %>% 
+  summarize(
+    n_rows = n(),
+    n_county_na = sum(is.na(county)),
+    any_value_missing = any(is.na(food_environment_index) | is.na(percent_fair_or_poor_health))
+  )
+
+```
+
+```{r}
+library(tigris)
+# light normalizer: remove suffixes like "County", "Borough", "Census Area", etc.
+clean_county <- function(x){
+  x %>% 
+    str_to_lower() %>%
+    str_replace_all("^st\\.?\\s+", "saint ") %>%
+    str_replace_all("\\s+(county|parish|city and borough|borough|census area|municipality|city)$","") %>%
+    str_squish()
+}
+
+# Build a fresh FIPS lookup from tigris
+fips_xwalk <- tigris::fips_codes %>%
+  transmute(
+    state = str_to_lower(state_name),
+    county = clean_county(county),
+    fips   = paste0(state_code, county_code)
+  ) %>%
+  distinct(state, county, .keep_all = TRUE)
+
+# Prepare your data and join to FIPS
+dat_fips <- chr_data_simplified %>%
+  filter(!is.na(county)) %>%               # drop statewide aggregates for county map
+  mutate(
+    state  = str_to_lower(state),
+    county = clean_county(county)
+  ) %>%
+  left_join(fips_xwalk, by = c("state","county"))
+
+# What failed to match?
+missing_ak_hi <- dat_fips %>%
+  filter(state %in% c("alaska","hawaii"), is.na(fips)) %>%
+  distinct(state, county)
+missing_ak_hi
+
+```
+
+```{r}
+# light normalizer: remove suffixes like "County", "Borough", "Census Area", etc.
+clean_county <- function(x){
+  x %>% 
+    str_to_lower() %>%
+    str_replace_all("^st\\.?\\s+", "saint ") %>%
+    str_replace_all("\\s+(county|parish|city and borough|borough|census area|municipality|city)$","") %>%
+    str_squish()
+}
+
+# Build a fresh FIPS lookup from tigris
+fips_xwalk <- tigris::fips_codes %>%
+  transmute(
+    state = str_to_lower(state_name),
+    county = clean_county(county),
+    fips   = paste0(state_code, county_code)
+  ) %>%
+  distinct(state, county, .keep_all = TRUE)
+
+# Prepare your data and join to FIPS
+dat_fips <- chr_data_simplified %>%
+  filter(!is.na(county)) %>%               # drop statewide aggregates for county map
+  mutate(
+    state  = str_to_lower(state),
+    county = clean_county(county)
+  ) %>%
+  left_join(fips_xwalk, by = c("state","county"))
+
+# What failed to match?
+missing_ak_hi <- dat_fips %>%
+  filter(state %in% c("alaska","hawaii"), is.na(fips)) %>%
+  distinct(state, county)
+missing_ak_hi
+
+```
+
+```{r}
+dat_fips <- chr_data_simplified %>%
+  filter(!is.na(county)) %>%
+  mutate(
+    state  = str_to_lower(state),
+    county = str_to_lower(county),
+    county = case_when(
+      state == "alaska" & county %in% c("kusilvak", "kusilvak census area") ~ "wade hampton",
+      state == "alaska" & county == "petersburg borough" ~ "petersburg",
+      state == "alaska" & county == "wrangell city and borough" ~ "wrangell",
+      TRUE ~ county
+    ),
+    county = clean_county(county)
+  ) %>%
+  left_join(fips_xwalk, by = c("state","county"))
+
+```
+
+```{r}
+# Food Environment Index
+plot_usmap(data = dat_fips, regions = "counties", values = "food_environment_index") +
+  scale_fill_viridis_c(name = "Food env.\nindex", na.value = "grey90") +
+  labs(title = "Food Environment Index by U.S. County") +
+  theme(legend.position = "right")
+
+# % Fair/Poor Health
+plot_usmap(data = dat_fips, regions = "counties", values = "percent_fair_or_poor_health") +
+  scale_fill_viridis_c(option = "magma", direction = -1, name = "% fair/poor", na.value = "grey90") +
+  labs(title = "Self-Reported Fair/Poor Health by U.S. County") +
+  theme(legend.position = "right")
+
+```

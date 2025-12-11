@@ -1,0 +1,146 @@
+---
+title: "Made_up_Sceneiro"
+output: html_document
+---
+
+```{r}
+set.seed(123)
+
+N <- 500  # small dataset
+
+# Basic predictors
+unemployment <- rbinom(N, 1, 0.3)       # 30% unemployed
+eviction <- rbinom(N, 1, 0.1)           # 10% had eviction
+addiction <- rbinom(N, 1, 0.2)          # 20% with addiction
+incarceration <- rbinom(N, 1, 0.15)     # 15% with incarceration history
+
+# True coefficients (for simulation)
+beta0 <- -2.0       # intercept
+b_unemp <- 0.8
+b_evict <- 1.5
+b_addict <- 1.0
+b_incarc <- 0.7
+
+# Linear predictor
+linpred <- beta0 +
+  b_unemp * unemployment +
+  b_evict * eviction +
+  b_addict * addiction +
+  b_incarc * incarceration
+
+# Convert to probability using logistic function
+p <- 1 / (1 + exp(-linpred))
+
+# Outcome: currently homeless (1) or not (0)
+homeless <- rbinom(N, 1, p)
+
+# Put into a data frame
+df_simple <- data.frame(
+  homeless,
+  unemployment,
+  eviction,
+  addiction,
+  incarceration
+)
+
+# Save to CSV
+write.csv(df_simple, "homelessness_risk_simple.csv", row.names = FALSE)
+
+# Quick peek
+head(df_simple, 10)
+```
+
+```{r}
+glimpse(df_simple)
+```
+```{r}
+dat_AB <- df_simple %>% select(homeless, unemployment) %>% drop_na()
+p_B <- mean(dat_AB$homeless == 1)
+p_A <- mean(dat_AB$unemployment == 1)
+p_A_g_B <- mean(dat_AB$unemplyment[dat_AB$homeless==1] == 1)
+p_B_g_A1 <- p_A_g_B * p_B / p_A
+p_B_g_A2 <- mean(dat_AB$homeless[dat_AB$unemployment==1] == 1)
+
+tibble(
+  'P(B)' = p_B,
+  'P(A)' = p_A,
+  'P(A|B)' = p_A_g_B,
+  'P(B|A)' = p_B_g_A1,
+  'P(B|A) direct' = p_B_g_A2
+)
+```
+
+```{r}
+# helper to extract counts
+binom_counts <- function(x) {
+  #x is a 0/1 vector
+  y < sum(x == 1, na.rm = TRUE) # successes
+  n <- sum(!is.na(x)) # trails
+  c(y = y, n = n)
+}
+
+## (a) Overall p P(homeless)
+cnt_all <- binom_counts(df$homeless)
+alpha0 <- 2; beta0 <- 2
+plot_beta(alpha0, beta0, mean = TRUE, mode = TRUE) +
+  ggplot2::ggtitle("Prioir for P(homeless)")
+
+plot_beta_binomial(alpha = alpha0, beta = beta0, y = cnt_all["y"], n = cnt_all["n"])
+summarize_beta_binomial(alpha = alpha0, beta = beta0, y = cnt_all["y"], n = cnt_all["n"])
+
+## (b) Conditional p_u = P(homeless | unemployment = 1)
+```
+
+
+```{r}
+df_u1 <- df_simple %>% filter(unemployment == 1)
+cnt_u1 <- binom_counts(df_u1$homeless)
+
+plot_beta_binomial(alpha = alpha0, beta = beta0, y = cnt_u1["y"], n = cnt_u1["n"]) +
+  ggplot2::ggtitle("Posterior: P(homeless | unemployment=1)")
+
+summarize_beta_binomial(alpha = alpha0, beta = beta0, y = cnt_u1["y"], n = cnt_u1["n"])
+```
+
+
+```{r}
+risk_vars <- c("unemployment","eviction","addiction","incarceration")
+
+post_summ <- map_dfr(risk_vars, function(v){
+  d <- df_simple %>% filter(.data[[v]] == 1)
+  y <- sum(d$homeless == 1, na.rm = TRUE)
+  n <- nrow(d)
+  s <- summarize_beta_binomial(alpha = alpha0, beta = beta0, y = y, n = n)
+  tibble(var = v,
+         y = y, n = n,
+         post_mean = s$posterior_mean,
+         ci_lo = s$credible_interval[1],
+         ci_hi = s$credible_interval[2])
+})
+
+post_summ
+
+```
+```{r}
+# Hypothetical: daily shelter-intake calls over one week
+calls <- c(3, 1, 6, 4, 2, 5, 3); n_days <- length(calls)
+
+# Prior belief about daily rate lambda: mean ~3.5, mode ~3  (weakly informative)
+gamma_from_mean_mode <- function(mean, mode){
+  r <- mean - mode; s <- mean * r; c(shape = s, rate = r)
+}
+gp <- gamma_from_mean_mode(mean = 3.5, mode = 3)
+
+plot_gamma(shape = gp["shape"], rate = gp["rate"], mean = TRUE, mode = TRUE) +
+  ggplot2::ggtitle("Prior for daily call rate λ")
+
+plot_poisson_likelihood(y = calls)
+
+plot_gamma_poisson(shape = gp["shape"], rate = gp["rate"],
+                   sum_y = sum(calls), n = n_days)
+
+summarize_gamma_poisson(shape = gp["shape"], rate = gp["rate"],
+                        sum_y = sum(calls), n = n_days)
+
+```
+

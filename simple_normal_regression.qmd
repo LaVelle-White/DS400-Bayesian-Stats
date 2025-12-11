@@ -24,7 +24,11 @@ options(scipen = 99)
 We want to understand the relationship between temperature and ridership
 
 ```{r}
-data(bikes)
+
+```
+
+```{r}
+
 ```
 
 💻 Do some exploratory data viz to tell me about the relationship between `temp_feel` and `rides`. Also make a guess for the number of rides based on `temp_feel` being 75 degrees
@@ -118,8 +122,7 @@ bike_model
 -   **Intercept ((Intercept) = −2195.3, MAD_SD ≈ 354)**\
     This is where the fitted line crosses the y-axis at **0°F**. It’s not meant to be literal (negative rides); it just anchors the line. If you center temperature (e.g., subtract the average temp), the intercept would become “typical rides at an average-temp day,” which is more interpretable.
 
--   **Residual spread (sigma = 1282.5, MAD_SD ≈ 40)**
-    Even **at the same temperature**, daily rides bounce around the line by about **±1,280 rides** on average. This real-world volatility dominates single-day predictions.
+-   **Residual spread (sigma = 1282.5, MAD_SD ≈ 40)** Even **at the same temperature**, daily rides bounce around the line by about **±1,280 rides** on average. This real-world volatility dominates single-day predictions.
 
 “From `stan_glm`, the slope’s 95% **credible interval** is **about \[72.2, 92.2\]** rides per °F (using Median = 82.2 and MAD_SD = 5.1). **Given the model, data, and priors, there’s a 95% probability** that the true slope lies in this range.”
 

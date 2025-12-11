@@ -76,8 +76,7 @@ df <- df %>%
 
 1.  Filter Dataframe df for the following:
 
-```{r} demo <- demographics %>% select(SEQN, RIDAGEYR)}
-```
+`{r} demo <- demographics %>% select(SEQN, RIDAGEYR)}`
 
 2.  Do some exploratory data analysis
 3.  

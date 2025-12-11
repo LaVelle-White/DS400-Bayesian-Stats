@@ -39,7 +39,12 @@ plot_normal(mean = 6.5, sd = 0.4)
 -   Add 4 `geom_vline()` to the plot above to indicate 1 standard deviation capturing 68% of the data and 2 standard deviations capturing 95% of the data
 
 ```{r}
-
+plot_normal(mean = 6.5, sd = .4) +
+  geom_vline(xintercept = 6.1, linetype = "dashed", color = "blue") +
+  geom_vline(xintercept = 6.9, linetype = "dashed", color = "blue") +
+  geom_vline(xintercept =5.7, color = "coral") +
+  geom_vline(xintercept = 7.3, color = "coral") +
+  theme_minimal()
 ```
 
 Let’s apply and examine this result in our analysis of μ, the average hippocampal volume among people that have a history of concussions. We’ve already built our prior model of μ, μ∼N(6.5,0.42). Next, consider some data. The `football` data in **bayesrules**, a subset of the `FootballBrain` data in the **Lock5Data** package ([Lock et al. 2016](https://www.bayesrulesbook.com/chapter-5#ref-lock2016statistics)), includes results for a cross-sectional study of hippocampal volumes among 75 subjects ([Singh et al. 2014](https://www.bayesrulesbook.com/chapter-5#ref-singh2014relationship)): 25 collegiate football players with a history of concussions (`fb_concuss`), 25 collegiate football players that do not have a history of concussions (`fb_no_concuss`), and 25 control subjects. For our analysis, we’ll focus on the n=25 subjects with a history of concussions (`fb_concuss`):
@@ -47,6 +52,10 @@ Let’s apply and examine this result in our analysis of μ, the average hippoca
 ```{r}
 # Load the data
 data(football)
+head(football)
+summary(football)
+view(football)
+
 ```
 
 *Challenge*
@@ -54,7 +63,20 @@ data(football)
 -   Visualize the football data in an interesting way utilizing `ggplot(()`
 
 ```{r}
+ggplot(football, aes(x = group, y = volume, fill = group)) +
+  geom_boxplot(alpha = 0.6, outliner.shape = NA) +
+  geom_jitter(width = 0.5, alpha = 0.7, size = 2) +
+  labs(title = "hippocampal volume by group")
 
+```
+
+```{r}
+ggplot(data = football, aes(x = years, y = ))
+```
+
+```{r}
+ggplot(footba, aes(x = group, y = years, fill = group )) +
+  geom_bar()
 ```
 
 Back to our example
@@ -118,4 +140,174 @@ AI Prompting
 
     -   What assumptions are associated with the model you chose? With those assumptions in mind, is the model still a good fit for your question/data?
 
-    -   Are there real datasets you can use to answer your question opposed to AI generated datasets?
+    -   Are there real datasets you can use to answer your question opposed to AI generated datasets?\
+        \
+        **Ai Critiques**
+
+    -   <div>
+
+        # 1) Quick code fixes (so your notebook runs)
+
+        </div>
+
+        **Bugs**
+
+        -   `dat_AB$unemplyment` → typo; should be `unemployment`.
+
+        -   You compute `p_A_g_B` using that typo, so it becomes `NA` and breaks Bayes’ rule line.
+
+        -   `df` isn’t defined; all your objects are in `df_simple`.
+
+        -   `binom_counts()` has two typos: uses `y < sum(...)` (should be `<-`) and “trails” (just a comment, but keep it clear).
+
+        -   You call plotting helpers (`plot_beta`, `plot_beta_binomial`, etc.). Those must come from a class helper file; otherwise R will error.
+
+        -   <div>
+
+            # 2) Critique of your dataset / DGP
+
+            </div>
+
+            Good for learning, but here’s what limits realism and inference:
+
+            -   **Independent predictors by construction.** You sample `unemployment`, `eviction`, `addiction`, `incarceration` as independent Bernoulli’s. In reality these **co-occur** (e.g., addiction ↔ incarceration; unemployment ↔ eviction). This independence shrinks real-world correlation structure and can mislead about variable importance.
+
+            -   **No interactions or nonlinearity.** True data often show synergy (e.g., unemployment × eviction risk on homelessness). Your logistic DGP is additive only.
+
+            -   **Perfect measurement; no missingness.** Real data have misclassification (e.g., under-reported addiction/incarceration), missingness not at random, and time ordering issues.
+
+            -   **Stationary cross-section.** Homelessness is dynamic. You simulate a one-shot snapshot; time (seasonality, policy shocks) matters.
+
+            -   **Causal vs predictive.** Your coefficients are “true” by design, but in real settings omitted variables (rent burden, disability, age, geography) confound relationships. Your toy data can’t teach you identification strategies.
+
+            Improvements for practice:
+
+            -   Introduce **correlated predictors** (e.g., draw from a multivariate probit/Ising/Bernoulli graph model).
+
+            -   Add **interactions** (e.g., `b_eviction_unemp * eviction*unemployment`).
+
+            -   Simulate **measurement error** and **missingness** patterns; then fit models that handle them.
+
+            -   Create **hierarchical structure** (zip/county random effects) and **time** (weekly/monthly panels).
+
+            ------------------------------------------------------------------------
+
+            # 3) Better Bayesian approaches for your questions
+
+            You’ve used Beta–Binomial (for rates) and Gamma–Poisson (for counts). Great starts. To answer “risk given multiple risk factors,” the natural upgrade is **Bayesian logistic regression** (Bernoulli likelihood + logit/probit link) with priors on coefficients:
+
+            **Bayesian logistic (preferred)**
+
+            -   Likelihood: `homeless_i ~ Bernoulli(p_i)`, `logit(p_i) = α + β1*unemployment + β2*eviction + β3*addiction + β4*incarceration + ...`
+
+            -   Priors: weakly-informative, e.g., `α ~ Normal(0, 5)`, `β ~ Normal(0, 2.5)` or `Student-t(3, 0, 2.5)` (Gelman’s recommendation).
+
+            -   In R: `brms::brm(homeless ~ unemployment + eviction + addiction + incarceration, family=bernoulli(), prior=..., data=df_simple)`.
+
+            **Hierarchical logistic**
+
+            -   Add random intercepts for **geography** or **time** when you have real data: `1 | county`, `1 | week`.
+
+            **Overdispersion / group rates**
+
+            -   If you only have group counts (e.g., by county), **Beta–Binomial** (with random effects) can capture extra-Binomial variation.
+
+            **Counts (calls)**
+
+            -   Your Gamma–Poisson prior is fine. If variance \> mean, move to **Negative Binomial** (equivalently, Poisson with Gamma-mixed rate) with **day-of-week** effects:\
+                `calls_d ~ NegBinom2(μ_d, ϕ)`, `log μ_d = α + δ_{weekday[d]}`.
+
+            **Normal–Normal?**
+
+            -   Not appropriate for a binary outcome’s probability directly. You *can* use a **probit** model (latent normal) which is conjugate-friendly for some data-augmented samplers, but conceptually it’s the same idea as logit.
+
+            **Model checks & comparison**
+
+            -   **Prior predictive** and **posterior predictive** checks.
+
+            -   Compare with LOO/WAIC. Use calibration plots for predicted probabilities.
+
+            ------------------------------------------------------------------------
+
+            # 4) Assumptions & is the model a good fit?
+
+            **Beta–Binomial (your marginal p’s)**
+
+            -   Assumes iid Bernoulli given a single `p` for the group, no covariates.
+
+            -   Good for a *single* rate or simple subgroup comparisons; not for multivariate risk.
+
+            **Gamma–Poisson (your calls)**
+
+            -   Assumes Poisson counts (events independent, constant rate within a day) and Gamma prior on λ.
+
+            -   Fit improves by adding weekday/seasonality and allowing overdispersion (NegBinom).
+
+            **Bayesian logistic**
+
+            -   Assumes: independence across individuals (conditional on covariates), **linear additivity on the log-odds**, correct specification of covariates (no big omitted confounders), and (usually) no severe separation.
+
+            -   For your simulated data, it’s a **perfect** fit (you generated with an additive logit). For real data, you’ll likely need interactions, random effects, and regularization.
+
+            ------------------------------------------------------------------------
+
+            # 5) Real datasets you can use
+
+            ## A) **Individual-level microdata for *risk factors***
+
+            -   **NSDUH public-use files**: rich measures of substance use disorder, mental health, employment, demographics (survey microdata). Caveat: limited geography in PUF; homelessness status is not a direct core variable in recent PUFs, so you’d use SUD/employment as predictors and link to **area-level** homelessness/eviction rates (ecological enrichment). [[SAMHSA+1]{.underline}](https://www.samhsa.gov/data/data-we-collect/nsduh-national-survey-drug-use-and-health/datafiles?utm_source=chatgpt.com){alt="https://www.samhsa.gov/data/data-we-collect/nsduh-national-survey-drug-use-and-health/datafiles?utm_source=chatgpt.com"}
+
+            -   **Fragile Families / Future of Families & Child Wellbeing Study (FFCWS)**: longitudinal microdata with **eviction, housing hardship, incarceration, employment,** etc.—excellent for **causal** questions with panel structure (application required; PUFs available). [[ICPSR+2ffcws.princeton.edu+2]{.underline}](https://www.icpsr.umich.edu/web/DSDR/studies/31622?utm_source=chatgpt.com){alt="https://www.icpsr.umich.edu/web/DSDR/studies/31622?utm_source=chatgpt.com"}
+
+            ## B) **Area-level homelessness & shelter counts (for Poisson/Gamma work)**
+
+            -   **NYC DHS Daily Reports / Shelter Census**: daily counts of families/individuals in shelter—great for λ modeling, seasonality, policy shocks. [[NYC Open Data+2NYC Open Data+2]{.underline}](https://data.cityofnewyork.us/Social-Services/DHS-Daily-Report/k46n-sa2m?utm_source=chatgpt.com){alt="https://data.cityofnewyork.us/Social-Services/DHS-Daily-Report/k46n-sa2m?utm_source=chatgpt.com"}
+
+            -   **LAHSA Homeless Count (2024–2025)**: annual point-in-time summaries for Los Angeles (trend/context; aggregated). [[LAHSA+1]{.underline}](https://www.lahsa.org/news?article=976-2024-greater-los-angeles-homeless-count-data&utm_source=chatgpt.com){alt="https://www.lahsa.org/news?article=976-2024-greater-los-angeles-homeless-count-data&utm_source=chatgpt.com"}
+
+            -   **HUD AHAR (2024 Part 1)**: national and CoC-level counts; excellent background + targets for validation. [[HUD User+1]{.underline}](https://www.huduser.gov/portal/sites/default/files/pdf/2024-AHAR-Part-1.pdf?utm_source=chatgpt.com){alt="https://www.huduser.gov/portal/sites/default/files/pdf/2024-AHAR-Part-1.pdf?utm_source=chatgpt.com"}
+
+            ## C) **Eviction & unemployment to enrich features**
+
+            -   **Eviction Lab** (Princeton): tract/city-level **eviction filings**; includes an **Eviction Tracking System** with downloadable data for many cities. [[Eviction Lab+1]{.underline}](https://evictionlab.org/?utm_source=chatgpt.com){alt="https://evictionlab.org/?utm_source=chatgpt.com"}
+
+            -   **BLS LAUS**: city/county/metro **unemployment rates** (monthly). [[Bureau of Labor Statistics+1]{.underline}](https://www.bls.gov/lau/?utm_source=chatgpt.com){alt="https://www.bls.gov/lau/?utm_source=chatgpt.com"}
+
+            ## D) **Notes on ACS / “who is captured?”**
+
+            -   **ACS PUMS** includes **sheltered** homeless via group quarters categories, but not unsheltered; useful with care (ecological limits). [[Census.gov+2Census.gov+2]{.underline}](https://www.census.gov/programs-surveys/acs/microdata.html?utm_source=chatgpt.com){alt="https://www.census.gov/programs-surveys/acs/microdata.html?utm_source=chatgpt.com"}
+
+            **How to use them together (example project)**
+
+            1.  Pull **NYC DHS daily shelter counts** → model `calls_t ~ weekday + policy + weather` with **NegBinomial**. [[NYC Open Data]{.underline}](https://data.cityofnewyork.us/Social-Services/DHS-Daily-Report/k46n-sa2m?utm_source=chatgpt.com){alt="https://data.cityofnewyork.us/Social-Services/DHS-Daily-Report/k46n-sa2m?utm_source=chatgpt.com"}
+
+            2.  Join **Eviction Lab weekly filings** + **LAUS unemployment** by month/city → add as lagged predictors in your count model. [[Eviction Lab+1]{.underline}](https://evictionlab.org/eviction-tracking/?utm_source=chatgpt.com){alt="https://evictionlab.org/eviction-tracking/?utm_source=chatgpt.com"}
+
+            3.  Separately, fit **Bayesian logistic** on **FFCWS** microdata to estimate individual risk given unemployment, eviction history, addiction proxies, incarceration. Validate with posterior predictive checks. [[ICPSR]{.underline}](https://www.icpsr.umich.edu/web/DSDR/studies/31622?utm_source=chatgpt.com){alt="https://www.icpsr.umich.edu/web/DSDR/studies/31622?utm_source=chatgpt.com"}
+
+            4.  <div>
+
+                ## 7) Bottom line answers to your questions
+
+                </div>
+
+                -   **Critique:** Your sim is clean for teaching but too simple for reality (independent predictors, no interactions, no time/geography, perfect measurement). Add correlation, interactions, hierarchy, and some missingness for realism.
+
+                -   **Alternate/better Bayesian models:**
+
+                    -   Use **Bayesian logistic regression** (and hierarchical extensions) for multi-predictor binary outcomes;
+
+                    -   **Negative Binomial** for overdispersed shelter calls with weekday/seasonality;
+
+                    -   Beta–Binomial is fine for subgroup **rates** only; Normal–Normal isn’t right for a binary outcome (use logit/probit).
+
+                -   **Assumptions & fit:**
+
+                    -   Beta–Binomial: iid within group, no covariates.
+
+                    -   Gamma–Poisson: Poisson counts/independence; consider NB if variance\>mean.
+
+                    -   Logistic: linear log-odds/additivity, independence, correct covariates.\
+                        With your simulated data, logistic is a perfect fit; with real data, plan for interactions & random effects.
+
+                -   **Real datasets:** Start with **NYC DHS** (daily shelter counts), **Eviction Lab** (filings), **BLS LAUS** (unemployment), and **FFCWS** (micro-level risk factors); use **HUD AHAR/LAHSA** for context and validation.

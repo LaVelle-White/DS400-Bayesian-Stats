@@ -1,64 +1,64 @@
-title: "Bayesian Analysis of Educational Success Factors: Data-Driven Insights to EmpowerU" author: "LaVelle White" date: "December 4, 2025" output: ioslides_presentation: self_contained: true ---
+#title: "Bayesian Analysis of Educational Success Factors: Data-Driven Insights to EmpowerU" author: "LaVelle White" date: "December 4, 2025" output: ioslides_presentation: self_contained: true ---
   
   #DS 400 - Bayesian Statistics Final Project## Introduction & Statistical Motivation
   
-  Primary Bayesian Research Question
+ # Primary Bayesian Research Question
 
-"What is the posterior probability distribution of key educational factors affecting student performance, and how can Bayesian methods provide superior uncertainty quantification compared to traditional approaches?"
+#"What is the posterior probability distribution of key educational factors affecting student performance, and how can Bayesian methods provide superior uncertainty quantification compared to traditional approaches?"
 
-Here we set the environment by loading the required packages setting up the working directory, and loading the student performance dataset.We then take a look at the data structure and basic summary stats to understand the variables and their distributions before modeling.
+##Here we set the environment by loading the required packages setting up the working directory, and loading the student performance dataset.We then take a look at the data structure and basic summary stats to understand the variables and their distributions before modeling.
 
-{r}
+
 options(repos = c(CRAN = "https://cloud.r-project.org/"))
 options(verbose = TRUE)
-#Installing packages 
-install.packages("readr")
-install.packages("tidyverse")
-install.packages("rstanarm")
-install.packages("bayesplot")
-install.packages("posterior")
+##Installing packages 
+#install.packages("readr")
+#install.packages("tidyverse")
+#install.packages("rstanarm")
+#install.packages("bayesplot")
+#install.packages("posterior")
 
-# Load packages
-library(readr)
-library(tidyverse)
-library(rstanarm)
-library(bayesplot)
-library(posterior)
-library(rstanarm)
-library(dplyr)
+## Load packages
+#library(readr)
+#library(tidyverse)
+#library(rstanarm)
+#library(bayesplot)
+#library(posterior)
+#library(rstanarm)
+#library(dplyr)
 
 set.seed(123)
 
 setwd( "/Users/lavellewhite/Documents/DS400-Bayesian-Stats")
 
-#file.exists("/Users/lavellewhite/Documents/DS400-Bayesian-Stats/student-mat.csv")
+######file.exists("/Users/lavellewhite/Documents/DS400-Bayesian-Stats/student-mat.csv")
 
-# Reload the data to be sure
-#df <- read.csv("student-mat.csv")
+## Reload the data to be sure
+#####df <- read.csv("student-mat.csv")
 df <- read.csv("/Users/lavellewhite/Documents/DS400-Bayesian-Stats/student+performance/student/student-mat.csv", sep = ";")
 
 
-# Check what we actually loaded
+## Check what we actually loaded
 
 
 str(df)
 head(df)
 summary(df)
 
-The dataset contains 395 observation with 33 variables including demographic behavioral, and academic factors. Variables are a mixture of numeric (age, studytime) and charater/factors types(internet access, parental jobs). This initial exploration confirm the need to recode some variables numerically for modeling and helps verify data intergrity before fitting Bayesian models.
+##The dataset contains 395 observation with 33 variables including demographic behavioral, and academic factors. Variables are a mixture of numeric (age, studytime) and charater/factors types(internet access, parental jobs). This initial exploration confirm the need to recode some variables numerically for modeling and helps verify data intergrity before fitting Bayesian models.
 
-Because the internet variable is categorical with values "yes" and "no", we recode it as numeric indicator (1 for yes, 0 for no). This facilitates easier interpretation of regression coefficients. Now numeric, enabling the Bayesian model to estimate the effect of internet access as a straightforward numeric coefficient comparing students with and without internet.
+#Because the internet variable is categorical with values "yes" and "no", we recode it as numeric indicator (1 for yes, 0 for no). This facilitates easier interpretation of regression coefficients. Now numeric, enabling the Bayesian model to estimate the effect of internet access as a straightforward numeric coefficient comparing students with and without internet.
 
-{r}
+
 df <- df %>%
   mutate(
     internet = ifelse(internet == "yes", 1, 0),
     address = ifelse(address == "U", 1, 0) # 1=urban, 0=rural
   )
 
-We select relevant columns and remove rows with missing values from those columns to ensure no missing entries interfere with the Bayesian modeling. Then, we fit a Bayesian linear regression model to predict final grade (G3) from study time, internet access, and past failures with weakly informative Normal(0, 2.5) priors.
+#We select relevant columns and remove rows with missing values from those columns to ensure no missing entries interfere with the Bayesian modeling. Then, we fit a Bayesian linear regression model to predict final grade (G3) from study time, internet access, and past failures with weakly informative Normal(0, 2.5) priors.
 
-{r}
+
 model_data <- df %>%
   select(G3, studytime, internet, failures, Medu, Fedu, address) %>%
   na.omit()
@@ -77,32 +77,32 @@ model_behav <- stan_glm(
 
 print(model_behav)
 
-Analysis: The model fits a linear relationship between final grades and predictors. Posterior summaries show plausible effect sizes and uncertainty. The sample size reduction due to na.omit is minor, preserving statistical power. This establishes a probabilistic baseline for assessing which behavioral factors most influence student success.
+##Analysis: The model fits a linear relationship between final grades and predictors. Posterior summaries show plausible effect sizes and uncertainty. The sample size reduction due to na.omit is minor, preserving statistical power. This establishes a probabilistic baseline for assessing which behavioral factors most influence student success.
 
-To visualize the model's coefficient estimates, we plot posterior distributions with 95% credible intervals for studytime, internet, and failures.
+#To visualize the model's coefficient estimates, we plot posterior distributions with 95% credible intervals for studytime, internet, and failures.
 
-{r}
+
 mcmc_areas(
 as.matrix(model_behav),
 pars = c("studytime", "internet", "failures")
 ) +
 ggplot2::ggtitle("Posterior Distributions for Key Predictors")
 
-Analysis: The plot reveals the uncertainty and effect direction for each predictor. For example, studytime's distribution skewed positive suggests increased study time likely improves grades, while the effect of failures is predominantly negative, indicating more past failures reduce final grade prospects.
+##Analysis: The plot reveals the uncertainty and effect direction for each predictor. For example, studytime's distribution skewed positive suggests increased study time likely improves grades, while the effect of failures is predominantly negative, indicating more past failures reduce final grade prospects.
 
-We conduct a posterior predictive check by comparing observed final grade means with those predicted by the model to assess goodness of fit.
+#We conduct a posterior predictive check by comparing observed final grade means with those predicted by the model to assess goodness of fit.
 
-{r}
+
 y_rep <- posterior_predict(model_behav)
 
 ppc_stat(model_data$G3, y_rep, stat = "mean") +
   ggplot2::ggtitle("Posterior Predictive Check: Mean G3")
 
-Analysis: The observed mean final grade falls within the predictive distribution range, indicating the model adequately captures the average performance level in the dataset. This supports the model's validity for predictive inference.
+##Analysis: The observed mean final grade falls within the predictive distribution range, indicating the model adequately captures the average performance level in the dataset. This supports the model's validity for predictive inference.
 
-We generate predictions for three hypothetical students differing in study time, internet access, and failures to illustrate how model outputs vary across profiles.
+#We generate predictions for three hypothetical students differing in study time, internet access, and failures to illustrate how model outputs vary across profiles.
 
-{r}
+
 new_students <- tibble(
 studytime = c(1, 3, 4),
 internet = c(0, 1, 1),
@@ -122,11 +122,11 @@ hi95 = quantile(x, 0.975)
 pred_results <- bind_cols(new_students, pred_summary)
 pred_results
 
-Analysis: The prediction table quantifies expected final grades and uncertainty for each profile. It shows that students with higher study time and internet access without failures have higher predicted mean grades, illustrating the impact of these factors on performance.
+##Analysis: The prediction table quantifies expected final grades and uncertainty for each profile. It shows that students with higher study time and internet access without failures have higher predicted mean grades, illustrating the impact of these factors on performance.
 
-Focusing on one student profile, we plot the posterior predictive distribution to depict uncertainty around expected final grade.
+#Focusing on one student profile, we plot the posterior predictive distribution to depict uncertainty around expected final grade.
 
-{r}
+
 one_student <- tibble(
 studytime = 2,
 internet = 1,
@@ -141,11 +141,11 @@ prob = 0.8
 ) +
 ggplot2::ggtitle("Posterior Predictive Distribution for One Student")
 
-Analysis: The density plot visualizes the range of likely final grades around the mean prediction, emphasizing Bayesian uncertainty quantification rather than a single point estimate. This can help educators set realistic expectations for individual outcomes.
+##Analysis: The density plot visualizes the range of likely final grades around the mean prediction, emphasizing Bayesian uncertainty quantification rather than a single point estimate. This can help educators set realistic expectations for individual outcomes.
 
-To communicate effect sizes clearly, we define a helper function to calculate posterior means, credible intervals, and the posterior probability of a positive effect for each predictor.
+#To communicate effect sizes clearly, we define a helper function to calculate posterior means, credible intervals, and the posterior probability of a positive effect for each predictor.
 
-{r}
+
 bayes_effect_summary <- function(model, term) {
 draws <- as_draws_df(model)[[term]]
 prob_pos <- mean(draws > 0)
@@ -162,12 +162,12 @@ bayes_effect_summary(model_behav, "studytime")
 bayes_effect_summary(model_behav, "internet")
 bayes_effect_summary(model_behav, "failures")
 
-Analysis: This numeric summary provides interpretable messages about each predictor's impact on grades. For instance, if the probability of a positive effect for studytime is high, it supports targeting study habits in educational interventions.
+#Analysis: This numeric summary provides interpretable messages about each predictor's impact on grades. For instance, if the probability of a positive effect for studytime is high, it supports targeting study habits in educational interventions.
 
-We fit the remaining models and compare them using Leave-One-Out Cross-Validation (LOO-CV), a Bayesian model comparison method that evaluates predictive performance.
+##We fit the remaining models and compare them using Leave-One-Out Cross-Validation (LOO-CV), a Bayesian model comparison method that evaluates predictive performance.
 
-{r}
-#Model 2: Demographic focus
+
+##Model 2: Demographic focus
 model_demo <- stan_glm(
   G3 ~ Medu + Fedu + address,
   data = model_data,
@@ -177,7 +177,7 @@ model_demo <- stan_glm(
   refresh = 0
 )
 
-#Model 3: Full model
+##Model 3: Full model
 model_full <- stan_glm(
   G3 ~ studytime + internet + failures + Medu + Fedu + address,
   data = model_data,
@@ -187,17 +187,17 @@ model_full <- stan_glm(
   refresh = 0
 )
 
-#LOO model comparison
+##LOO model comparison
 loo_compare_results <- loo_compare(
   loo(model_behav), loo(model_demo), loo(model_full)
 )
 print(loo_compare_results)
 
-Analysis: The LOO comparison shows which model best predicts held-out data. Lower elpd (expected log predictive density) is better. The behavioral model (Model 1) appears to have strongest predictive performance, suggesting effort/access factors explain more variance than demographics alone.
+####Analysis: The LOO comparison shows which model best predicts held-out data. Lower elpd (expected log predictive density) is better. The behavioral model (Model 1) appears to have strongest predictive performance, suggesting effort/access factors explain more variance than demographics alone.
 
-We verify MCMC convergence with trace plots and R-hat statistics for the behavioral model.
+#We verify MCMC convergence with trace plots and R-hat statistics for the behavioral model.
 
-{r}
+
 #MCMC diagnostics
 mcmc_trace(model_behav, pars = c("studytime", "internet", "failures")) +
   ggplot2::ggtitle("MCMC Trace Plots: Behavioral Model")
@@ -205,80 +205,81 @@ mcmc_trace(model_behav, pars = c("studytime", "internet", "failures")) +
 #R-hat summary (should all be < 1.1)
 print(summary(model_behav, digits = 2)[, "Rhat", drop = FALSE])
 
-Analysis: Trace plots show good mixing (chains explore parameter space without sticking). All R-hat values are below 1.1, confirming reliable MCMC convergence.
+##Analysis: Trace plots show good mixing (chains explore parameter space without sticking). All R-hat values are below 1.1, confirming reliable MCMC convergence.
 
-Additional Comments on Model Fit and Overfitting
+#Additional Comments on Model Fit and Overfitting
 
-While our models apply weakly informative priors to regularize coefficient estimates, the risk of overfitting remains when including multiple predictors relative to sample size. Our LOO-CV comparison suggests the behavioral model sufficiently balances predictive performance and parsimony, while the full model shows no clear improvement, indicating potential over-complexity.
+##While our models apply weakly informative priors to regularize coefficient estimates, the risk of overfitting remains when including multiple predictors relative to sample size. Our LOO-CV comparison suggests the behavioral model sufficiently balances predictive performance and parsimony, while the full model shows no clear improvement, indicating potential over-complexity.
 
-To further address this, future work could:
+##To further address this, future work could:
   
-  Explore more regularizing prior choices and conduct sensitivity analyses.
+###Explore more regularizing prior choices and conduct sensitivity analyses.
 
-Incorporate interaction and nonlinear terms to capture complex relationships without overfitting.
+###Incorporate interaction and nonlinear terms to capture complex relationships without overfitting.
 
-Utilize effective sample size diagnostics to ensure reliable posterior estimates.
+###Utilize effective sample size diagnostics to ensure reliable posterior estimates.
 
-Apply external cross-validation frameworks to robustly assess predictive generalization.
+###Apply external cross-validation frameworks to robustly assess predictive generalization.
 
-Despite these caveats, the consistent MCMC convergence diagnostics and posterior predictive checks support our model's suitability for initial educational success prediction, providing a credible foundation for the EmpowerU program’s data-driven participant support strategies.
+#Despite these caveats, the consistent MCMC convergence diagnostics and posterior predictive checks support our model's suitability for initial educational success prediction, providing a credible foundation for the EmpowerU program’s data-driven participant support strategies.
 
-Results Summary & Research Question Answers
+#Results Summary & Research Question Answers
 
-Answering Our Core Bayesian Questions:
+##Answering Our Core Bayesian Questions:
 
-Parameter Estimation: The posterior for studytime shows a high probability of positive effect. Failures have a strong negative posterior effect.
+###Parameter Estimation: The posterior for studytime shows a high probability of positive effect. Failures have a strong negative posterior effect.
 
-Model Comparison: LOO-CV weights favor the behavioral model (Model 1) over demographic (Model 2), suggesting effort/access factors better predict grades than parental education alone.
+###Model Comparison: LOO-CV weights favor the behavioral model (Model 1) over demographic (Model 2), suggesting effort/access factors better predict grades than parental education alone.
 
-Predictive Performance: Posterior predictive checks confirm the model reproduces observed grade distributions. Predictions for new students show realistic uncertainty ranges.
+###Predictive Performance: Posterior predictive checks confirm the model reproduces observed grade distributions. Predictions for new students show realistic uncertainty ranges.
 
-MCMC Quality: All R-hat < 1.1, trace plots show excellent convergence.
+###MCMC Quality: All R-hat < 1.1, trace plots show excellent convergence.
 
-Prior Justification
+#Prior Justification
 
-The Normal(0, 2.5) prior is weakly informative, centering effects near zero but allowing moderate effects (±5 points) based on educational research suggesting 1–3 point grade changes per unit predictor change.
+##The Normal(0, 2.5) prior is weakly informative, centering effects near zero but allowing moderate effects (±5 points) based on educational research suggesting 1–3 point grade changes per unit predictor change.
 
-Limitations & Model Assumptions
+#Limitations & Model Assumptions
 
-Linear Gaussian model assumes constant predictor effects across grade range.
+##Linear Gaussian model assumes constant predictor effects across grade range.
 
-Complete case analysis discards a minor fraction of data.
+##Complete case analysis discards a minor fraction of data.
 
-No interactions between predictors.
+##No interactions between predictors.
 
-EmpowerU Nonprofit Application
+#EmpowerU Nonprofit Application
 
-Student Variable
+##Student Variable
 
-EmpowerU Success Metric
+###EmpowerU Success Metric
 
-G3 (final grade)
+###G3 (final grade)
 
-Program completion/job placement
+###Program completion/job placement
 
-studytime
+####studytime
 
-Workshop attendance hours
+####Workshop attendance hours
 
-internet
+####internet
 
-Digital literacy/computer access
+####Digital literacy/computer access
 
-failures
+####failures
 
-Prior program interruptions
+#Prior program interruptions
 
-Practical Insights: Prioritize participants with high predicted success or large lift from support. Use posterior predictive distributions to set realistic completion targets.
+##Practical Insights: Prioritize participants with high predicted success or large lift from support. Use posterior predictive distributions to set realistic completion targets.
 
-Bayesian Advantages Demonstrated
+#Bayesian Advantages Demonstrated
 
-Full uncertainty quantification (not just p-values)
+##Full uncertainty quantification (not just p-values)
 
-Direct probability statements ("89% chance studytime helps")
+##Direct probability statements ("89% chance studytime helps")
 
-Principled model comparison (LOO-CV)
+##Principled model comparison (LOO-CV)
 
-Predictive distributions for decision-making
+##Predictive distributions for decision-making
 
-Conclusion: This Bayesian framework provides EmpowerU with a scalable, uncertainty-aware approach to maximize program success.
+##Conclusion: This Bayesian framework provides EmpowerU with a scalable, uncertainty-aware approach to maximize program success.
+
